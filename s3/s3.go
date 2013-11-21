@@ -122,7 +122,8 @@ func (b *Bucket) PutBucket(perm ACL) error {
 		headers: headers,
 		payload: b.locationConstraint(),
 	}
-	return b.S3.query(req, nil)
+	_, err := b.S3.query(req, nil)
+	return err
 }
 
 // DelBucket removes an existing S3 bucket. All objects in the bucket must
@@ -136,7 +137,7 @@ func (b *Bucket) DelBucket() (err error) {
 		path:   "/",
 	}
 	for attempt := attempts.Start(); attempt.Next(); {
-		err = b.S3.query(req, nil)
+		_, err = b.S3.query(req, nil)
 		if !shouldRetry(err) {
 			break
 		}
@@ -185,14 +186,14 @@ func (b *Bucket) GetReader(path string) (rc io.ReadCloser, err error) {
 // Put inserts an object into the S3 bucket.
 //
 // See http://goo.gl/FEBPD for details.
-func (b *Bucket) Put(path string, data []byte, contType string, perm ACL) error {
+func (b *Bucket) Put(path string, data []byte, contType string, perm ACL) (*http.Response, error) {
 	body := bytes.NewBuffer(data)
 	return b.PutReader(path, body, int64(len(data)), contType, perm)
 }
 
 // PutReader inserts an object into the S3 bucket by consuming data
 // from r until EOF.
-func (b *Bucket) PutReader(path string, r io.Reader, length int64, contType string, perm ACL) error {
+func (b *Bucket) PutReader(path string, r io.Reader, length int64, contType string, perm ACL) (*http.Response, error) {
 	headers := map[string][]string{
 		"Content-Length": {strconv.FormatInt(length, 10)},
 		"Content-Type":   {contType},
@@ -217,7 +218,8 @@ func (b *Bucket) Del(path string) error {
 		bucket: b.Name,
 		path:   path,
 	}
-	return b.S3.query(req, nil)
+	_, err := b.S3.query(req, nil)
+	return err
 }
 
 // The ListResp type holds the results of a List bucket operation.
@@ -319,7 +321,7 @@ func (b *Bucket) List(prefix, delim, marker string, max int) (result *ListResp, 
 	}
 	result = &ListResp{}
 	for attempt := attempts.Start(); attempt.Next(); {
-		err = b.S3.query(req, result)
+		_, err = b.S3.query(req, result)
 		if !shouldRetry(err) {
 			break
 		}
@@ -398,20 +400,20 @@ func (req *request) url() (*url.URL, error) {
 // query prepares and runs the req request.
 // If resp is not nil, the XML data contained in the response
 // body will be unmarshalled on it.
-func (s3 *S3) query(req *request, resp interface{}) error {
+func (s3 *S3) query(req *request, resp interface{}) (*http.Response, error) {
 	err := s3.prepare(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	hresp, err := s3.run(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp != nil {
 		err = xml.NewDecoder(hresp.Body).Decode(resp)
 	}
 	hresp.Body.Close()
-	return nil
+	return hresp, nil
 }
 
 // prepare sets up req to be delivered to S3.
