@@ -352,11 +352,15 @@ func (b *Bucket) URL(path string) string {
 
 // SignedURL returns a signed URL that allows anyone holding the URL
 // to retrieve the object at path. The signature is valid until expires.
-func (b *Bucket) SignedURL(path string, expires time.Time) string {
+func (b *Bucket) SignedURL(path, versionId string, expires time.Time) string {
+	params := url.Values{"Expires": {strconv.FormatInt(expires.Unix(), 10)}}
+	if len(versionId) != 0 {
+		params.Add("versionId", versionId)
+	}
 	req := &request{
 		bucket: b.Name,
 		path:   path,
-		params: url.Values{"Expires": {strconv.FormatInt(expires.Unix(), 10)}},
+		params: params,
 	}
 	err := b.S3.prepare(req)
 	if err != nil {
